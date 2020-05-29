@@ -41,7 +41,7 @@ class ProvisioningHandler:
 		self.claim_cert = self.config_parameters['CLAIM_CERT']
 		self.secure_key = self.config_parameters['SECURE_KEY']
 		self.root_cert = self.config_parameters['ROOT_CERT']
-	
+		self.device_info = {'certPath': self.secure_cert_path, 'endpoint': self.iot_endpoint, 'rootCert': self.root_cert}
 		# Sample Provisioning Template requests a serial number as a 
 		# seed to generate Thing names in IoTCore. Simulating here.
 		self.unique_id = str(int(round(time.time() * 1000)))
@@ -139,7 +139,8 @@ class ProvisioningHandler:
 		elif 'deviceConfiguration' in json_data:
 			self.logger.info('##### CERT ACTIVATED AND THING {} CREATED #####'.format(json_data['thingName']))
 			print('##### CERT ACTIVATED AND THING {} CREATED #####'.format(json_data['thingName']))
-			self.rotate_certs() 
+			self.device_info['thingName'] = json_data['thingName']
+			self.rotate_certs()
 		else:
 			self.logger.info(json_data)
 
@@ -162,21 +163,20 @@ class ProvisioningHandler:
 		f = open('{}/{}'.format(self.secure_cert_path, self.new_cert_name), 'w+')
 		f.write(payload['certificatePem'])
 		f.close()
-		
+		self.device_info['cert'] = self.new_cert_name
 
 		### Create private key
 		self.new_key_name = '{}-private.pem.key'.format(self.new_key_root)
 		f = open('{}/{}'.format(self.secure_cert_path, self.new_key_name), 'w+')
 		f.write(payload['privateKey'])
 		f.close()
+		self.device_info['privateKey'] = self.new_key_name
 
 		### Extract/return Ownership token
 		self.ownership_token = payload['certificateOwnershipToken']
 		
 		#register newly aquired cert
 		self.register_thing(self.unique_id, self.ownership_token)
-		
-
 
 	def register_thing(self, serial, token):
 		"""Calls the fleet provisioning service responsible for acting upon instructions within device templates.
@@ -205,6 +205,9 @@ class ProvisioningHandler:
 		self.new_cert_pub_sub()
 		print("##### ACTIVATED AND TESTED CREDENTIALS ({}, {}). #####".format(self.new_key_name, self.new_cert_name))
 		print("##### FILES SAVED TO {} #####".format(self.secure_cert_path))
+
+		with open('device_info.json', 'w') as f:
+			json.dump(self.device_info, f, indent=4)
 
 	def cert_validation_test(self):
 		self.test_MQTTClient.configureEndpoint(self.iot_endpoint, 8883)
